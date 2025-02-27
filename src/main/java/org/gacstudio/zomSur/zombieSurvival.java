@@ -855,7 +855,7 @@ public class zombieSurvival extends JavaPlugin implements CommandExecutor, Liste
                 zombieItemCommand.cooldowns.remove(player.getUniqueId());
             }
 
-            // 좀비 팀 스코어보드제거
+            // 좀비 팀 스코어보드 제거
             if(zombieTeamSCB != null) {
                 zombieTeamSCB.unregister();
             }
