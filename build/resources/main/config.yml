@@ -1,0 +1,6 @@
+# Please enter the world name.
+# There must be only one world on the server for the plugin to work properly.
+worldName:
+
+# Please enter winning item.
+win-item: DIAMOND

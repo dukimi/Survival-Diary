@@ -1,0 +1,23 @@
+name: zombieSurvival
+version: '1.8-SNAPSHOT'
+main: org.gacstudio.zomSur.zombieSurvival
+api-version: '1.21'
+
+commands:
+  zomsur:
+    description: Zombie Survival Commands
+    permission: zomsur.use
+    permission-message: You do not have permission to use this command.
+  zombieshop:
+    description: Open Zombie Shop
+  teamchat:
+    description: Change TeamChat mode
+    usage: /teamchat
+  allchat:
+    description: Change allChat mode
+    usage: /allchat
+
+permissions:
+  zomsur.use:
+    description: Allows the use of the zomsur command
+    default: op
