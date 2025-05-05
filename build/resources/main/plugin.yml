@@ -1,5 +1,5 @@
 name: zombieSurvival
-version: '1.8-SNAPSHOT'
+version: 1.9-SNAPSHOT
 main: org.gacstudio.zomSur.zombieSurvival
 api-version: '1.21'
 
