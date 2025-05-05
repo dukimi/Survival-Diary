@@ -39,7 +39,7 @@ public class zombieItemCommand implements CommandExecutor, Listener {
                 if (plugin.getZombieTeam().contains(player.getUniqueId()) && plugin.gameStart && plugin.readyShop) {
                     showZombieItems(player);
                 } else {
-                    player.sendMessage(ChatColor.RED + "아직 사용할 수 없습니다!");
+                    player.sendMessage(ChatColor.RED + "사용할 수 없습니다!");
                 }
             } else {
                 sender.sendMessage(ChatColor.RED + "이 명령어는 플레이어만 사용할 수 있습니다.");

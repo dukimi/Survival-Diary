@@ -37,6 +37,10 @@ public class zombieSurvival extends JavaPlugin implements CommandExecutor, Liste
     private final List<UUID> zombieTeam = new ArrayList<>();
     private Location centralChestLocation; // 중앙 상자의 위치
 
+    // 좀비 킬 감지
+    private final Map<UUID, UUID> lastDamager = new HashMap<>();
+    private final Map<UUID, Long> lastDamageTime = new HashMap<>();
+
     private Location[] survivorSpawnPoints;
     private Location[] zombieSpawnPoints;
 
@@ -52,7 +56,7 @@ public class zombieSurvival extends JavaPlugin implements CommandExecutor, Liste
     int maxZ = 200;
 
     @Override
-    public void onEnable() { // 첫 실행시 월드 없으면 생성하게 추가해야함
+    public void onEnable() {
         getServer().getPluginManager().registerEvents(this, this);
 
         dataLoad = new dataLoad(this);
@@ -185,8 +189,10 @@ public class zombieSurvival extends JavaPlugin implements CommandExecutor, Liste
             if (sender instanceof Player) {
                 Player player = (Player) sender;
                 // 플레이어가 원하는 월드에 있는지 확인합니다.
-                if (!player.getWorld().getName().equalsIgnoreCase(worldName)) {
-                    player.sendMessage(ChatColor.RED + "해당 명령어는 " + worldName + " 세계에서만 사용할 수 있습니다.");
+                if (!(player.getWorld().getName().equalsIgnoreCase(worldName)
+                        || player.getWorld().getName().equalsIgnoreCase(worldName + "_nether")
+                        || player.getWorld().getName().equalsIgnoreCase(worldName + "_the_end"))) {
+                    player.sendMessage(ChatColor.RED + "이 명령어는 " + worldName + " 세계와 해당 세계의 네더와 엔드에서만 사용할 수 있습니다.");
                     return true;
                 }
             }
@@ -446,21 +452,19 @@ public class zombieSurvival extends JavaPlugin implements CommandExecutor, Liste
 
     private void sendStartMessageToAll() {
         // 모든 플레이어에게 "게임이 곧 시작됩니다!" 메시지 전송
-        for (UUID uuid : playerTeam) {
+        for (UUID uuid : getAllPlayers()) {
             Player player = Bukkit.getPlayer(uuid);
             if (player != null && player.isOnline()) {
                 player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_XYLOPHONE, 1.0f, 1.0f);
                 sendBigTitle(player, ChatColor.YELLOW + "게임이 곧 시작됩니다!", "");
             }
         }
-
-        for (UUID uuid : zombieTeam) {
-            Player player = Bukkit.getPlayer(uuid);
-            if (player != null && player.isOnline()) {
-                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_XYLOPHONE, 1.0f, 1.0f);
-                sendBigTitle(player, ChatColor.YELLOW + "게임이 곧 시작됩니다!", "");
-            }
-        }
+    }
+    private List<UUID> getAllPlayers() {
+        List<UUID> allPlayers = new ArrayList<>();
+        allPlayers.addAll(playerTeam);
+        allPlayers.addAll(zombieTeam);
+        return allPlayers;
     }
 
     private void sendTeamInfoToPlayers() {
@@ -653,6 +657,10 @@ public class zombieSurvival extends JavaPlugin implements CommandExecutor, Liste
         Scoreboard board = Bukkit.getScoreboardManager().getMainScoreboard();
         Team zombieTeamSCB = board.getTeam("zombies"); // zombies팀 불러오기
 
+        UUID uuid = event.getPlayer().getUniqueId();
+        lastDamager.remove(uuid);
+        lastDamageTime.remove(uuid);
+
         Player quittingPlayer = event.getPlayer();
         if (isReady) {
             getLogger().info(quittingPlayer.getName() + " has left the server. Game progress has been cancelled.");
@@ -681,52 +689,67 @@ public class zombieSurvival extends JavaPlugin implements CommandExecutor, Liste
             checkVictoryConditions();
         }
     }
+
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
+        Player deadPlayer = event.getEntity();
+        UUID deadPlayerUUID = deadPlayer.getUniqueId();
+
         Scoreboard board = Bukkit.getScoreboardManager().getMainScoreboard();
-        Team zombieTeamSCB = board.getTeam("zombies"); // zombies팀 불러오기
+        Team zombieTeamSCB = board.getTeam("zombies");
 
         if (gameStart && !isReady) {
-            Player deadPlayer = event.getEntity();
-            UUID deadPlayerUUID = deadPlayer.getUniqueId();
+            UUID damagerUUID = null;
 
-            // 사망 원인 확인
             EntityDamageEvent damageEvent = deadPlayer.getLastDamageCause();
             if (damageEvent instanceof EntityDamageByEntityEvent) {
-                EntityDamageByEntityEvent entityDamageEvent = (EntityDamageByEntityEvent) damageEvent;
-                Entity damager = entityDamageEvent.getDamager();
-
-                // 사망 원인이 좀비 팀 플레이어인지 확인
+                Entity damager = ((EntityDamageByEntityEvent) damageEvent).getDamager();
                 if (damager instanceof Player) {
-                    Player damagerPlayer = (Player) damager;
-                    if (zombieTeam.contains(damagerPlayer.getUniqueId())) {
-                        // 플레이어가 생존자 팀에 있는지 확인
-                        if (playerTeam.remove(deadPlayerUUID)) {
-                            // 플레이어를 좀비 팀으로 이동
-                            zombieTeam.add(deadPlayerUUID);
-                            zombieTeamSCB.addEntry(deadPlayer.getName());
+                    damagerUUID = ((Player) damager).getUniqueId();
+                }
+            }
 
-                            // 생존자 수 확인
-                            if (playerTeam.size() > 1) {
-                                // 타이틀 및 메시지 전송 (마지막 생존자가 아닐 때)
-                                sendBigTitle(deadPlayer, ChatColor.RED + "좀비가 되었습니다!", ChatColor.WHITE + "나머지 생존자를 모두 감염시키세요!");
-                                deadPlayer.sendMessage(ChatColor.RED + "\n\n안타깝지만 당신은 좀비가 되었습니다!" + ChatColor.WHITE + "\n\n나머지 생존자들을 처리해 모두 좀비로 만드세요!" + ChatColor.GOLD + "\n/zombieshop 명령어로 생존자를 처리하는데 도움을 주는 물건을 구입할 수 있습니다!" + ChatColor.RED + "\n\n생존자는 추가 좀비 감염을 막기 위해 중앙 상자(0,0)에 접근할 것입니다! 상자를 방어하는것도 잊지 마세요!\n\n");
-                            }
-
-                            // 탭 목록 이름을 업데이트
-                            deadPlayer.setPlayerListName(ChatColor.RED + "[좀비] " + deadPlayer.getName());
-
-                            // 모든 플레이어에게 사망 및 팀 이동 메시지 전송
-                            for (Player player : Bukkit.getOnlinePlayers()) {
-                                player.sendMessage(ChatColor.RED + deadPlayer.getName() + "님이 좀비 팀의 " + damagerPlayer.getName() + "에게 사망하여 좀비 팀으로 이동했습니다!");
-                            }
-
-                            // 승리 조건 확인
-                            checkVictoryConditions();
-                        }
+            // 직접 데미지가 아니면, 최근에 맞은 플레이어 확인
+            if (damagerUUID == null) {
+                if (lastDamager.containsKey(deadPlayerUUID)) {
+                    long lastHitTime = lastDamageTime.getOrDefault(deadPlayerUUID, 0L);
+                    if (System.currentTimeMillis() - lastHitTime <= 10_000) { // 최근 10초 이내
+                        damagerUUID = lastDamager.get(deadPlayerUUID);
                     }
                 }
             }
+
+            // 가해자가 유효한 좀비 플레이어인지 확인
+            if (damagerUUID != null && zombieTeam.contains(damagerUUID)) {
+                Player damagerPlayer = Bukkit.getPlayer(damagerUUID);
+                if (playerTeam.remove(deadPlayerUUID)) {
+                    zombieTeam.add(deadPlayerUUID);
+                    zombieTeamSCB.addEntry(deadPlayer.getName());
+
+                    if (playerTeam.size() > 1) {
+                        sendBigTitle(deadPlayer, ChatColor.RED + "좀비가 되었습니다!", ChatColor.WHITE + "나머지 생존자를 모두 감염시키세요!");
+                        deadPlayer.sendMessage(ChatColor.RED + "\n\n안타깝지만 당신은 좀비가 되었습니다!" + ChatColor.WHITE + "\n\n나머지 생존자들을 처리해 모두 좀비로 만드세요!" + ChatColor.GOLD + "\n/zombieshop 명령어로 생존자를 처리하는데 도움을 주는 물건을 구입할 수 있습니다!" + ChatColor.RED + "\n\n생존자는 추가 좀비 감염을 막기 위해 중앙 상자(0,0)에 접근할 것입니다! 상자를 방어하는것도 잊지 마세요!\n\n");
+                    }
+
+                    deadPlayer.setPlayerListName(ChatColor.RED + "[좀비] " + deadPlayer.getName());
+
+                    for (Player player : Bukkit.getOnlinePlayers()) {
+                        player.sendMessage(ChatColor.RED + deadPlayer.getName() + "님이 좀비 팀의 " + (damagerPlayer != null ? damagerPlayer.getName() : "알 수 없음") + "에게 사망하여 좀비 팀으로 이동했습니다!");
+                    }
+
+                    checkVictoryConditions();
+                }
+            }
+        }
+    }
+    @EventHandler
+    public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        if (event.getEntity() instanceof Player && event.getDamager() instanceof Player) {
+            Player damaged = (Player) event.getEntity();
+            Player damager = (Player) event.getDamager();
+
+            lastDamager.put(damaged.getUniqueId(), damager.getUniqueId());
+            lastDamageTime.put(damaged.getUniqueId(), System.currentTimeMillis());
         }
     }
 
@@ -859,6 +882,9 @@ public class zombieSurvival extends JavaPlugin implements CommandExecutor, Liste
             if(zombieTeamSCB != null) {
                 zombieTeamSCB.unregister();
             }
+
+            lastDamager.clear();
+            lastDamageTime.clear();
 
             zombieTeam.clear();
             playerTeam.clear();

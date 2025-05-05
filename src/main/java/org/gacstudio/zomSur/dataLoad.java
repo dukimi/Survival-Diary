@@ -35,8 +35,8 @@ public class dataLoad {
         FileConfiguration config = zombieSurvival.getConfig();
         zombieSurvival.worldName = config.getString("worldName");
 
+        // config.yml 에서 worldName 이 비어있다면 서버의 첫 번째 세계(기본 세계값)를 가져와서 이름을 설정
         if (zombieSurvival.worldName == null) {
-            // 서버의 첫 번째 월드(기본 월드)를 가져와서 이름을 설정합니다.
             zombieSurvival.worldName = Bukkit.getWorlds().getFirst().getName();
         }
 
