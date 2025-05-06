@@ -1,11 +1,11 @@
 name: zombieSurvival
-version: 1.9-SNAPSHOT
+version: 1.10-SNAPSHOT
 main: org.gacstudio.zomSur.zombieSurvival
 api-version: '1.21'
 
 commands:
   zomsur:
-    description: Zombie Survival Commands
+    description: Survival Diary Commands
     permission: zomsur.use
     permission-message: You do not have permission to use this command.
   zombieshop:

@@ -4,3 +4,6 @@ worldName:
 
 # Please enter winning item.
 win-item: DIAMOND
+
+# zombie-percent(0-100)
+zombie-percent: 40

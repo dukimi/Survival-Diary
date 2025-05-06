@@ -228,8 +228,10 @@ public class zombieSurvival extends JavaPlugin implements CommandExecutor, Liste
                 gameStart = true;
                 isReady = true;
 
-                // 랜덤하게 좀비로 선정 (40%를 좀비로)
-                int zombieCount = Math.max(1, onlinePlayers.size() * 40 / 100); // 최소 1명은 좀비가 됨
+                // 랜덤하게 좀비로 선정(기본값 40%)
+                int zombiePercent = getConfig().getInt("zombie-percent", 40);
+                int zombieCount = Math.max(1, Math.round(onlinePlayers.size() * zombiePercent / 100.0f));
+
                 // 플레이어 섞기
                 Collections.shuffle(onlinePlayers);
 
