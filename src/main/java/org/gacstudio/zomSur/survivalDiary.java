@@ -897,4 +897,3 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
         }
     }
 }
-
