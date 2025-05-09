@@ -24,11 +24,11 @@ import static org.bukkit.Bukkit.getServer;
 
 public class zombieItemCommand implements CommandExecutor, Listener {
 
-    private final zombieSurvival plugin;
+    private final survivalDiary mainPg;
     public final HashMap<UUID, Long> cooldowns = new HashMap<>(); // 쿨타임 상태 저장
 
-    public zombieItemCommand(zombieSurvival plugin) {
-        this.plugin = plugin;
+    public zombieItemCommand(survivalDiary mainPg) {
+        this.mainPg = mainPg;
     }
 
     @Override
@@ -36,7 +36,7 @@ public class zombieItemCommand implements CommandExecutor, Listener {
         if (command.getName().equalsIgnoreCase("zombieshop")) {
             if (sender instanceof Player) {
                 Player player = (Player) sender;
-                if (plugin.getZombieTeam().contains(player.getUniqueId()) && plugin.gameStart && plugin.readyShop) {
+                if (mainPg.getZombieTeam().contains(player.getUniqueId()) && mainPg.gameStart && mainPg.readyShop) {
                     showZombieItems(player);
                 } else {
                     player.sendMessage(ChatColor.RED + "사용할 수 없습니다!");
@@ -132,7 +132,7 @@ public class zombieItemCommand implements CommandExecutor, Listener {
 
             if (coalCount >= 9) {
                 // 생존자 리스트 가져오기
-                List<UUID> survivorUUIDs = plugin.getPlayerTeam();
+                List<UUID> survivorUUIDs = mainPg.getPlayerTeam();
 
                 // 모든 생존자에게 발광 효과 적용
                 for (UUID uuid : survivorUUIDs) {
@@ -145,7 +145,7 @@ public class zombieItemCommand implements CommandExecutor, Listener {
                 }
 
                 // 좀비 팀에도 알림 보내기
-                List<UUID> zombieUUIDs = plugin.getZombieTeam();
+                List<UUID> zombieUUIDs = mainPg.getZombieTeam();
                 for (UUID uuid : zombieUUIDs) {
                     if (!uuid.equals(player.getUniqueId())) { // 발광 효과를 사용한 플레이어의 UUID와 비교(발광 효과를 사용한 플레이어는 이 알림이 안뜨게)
                         Player zombie = Bukkit.getPlayer(uuid);

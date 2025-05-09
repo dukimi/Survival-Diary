@@ -28,7 +28,7 @@ import org.bukkit.scoreboard.Team;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class zombieSurvival extends JavaPlugin implements CommandExecutor, Listener {
+public class survivalDiary extends JavaPlugin implements CommandExecutor, Listener {
 
     private zombieItemCommand zombieItemCommand;
     private dataLoad dataLoad;
@@ -897,3 +897,4 @@ public class zombieSurvival extends JavaPlugin implements CommandExecutor, Liste
         }
     }
 }
+

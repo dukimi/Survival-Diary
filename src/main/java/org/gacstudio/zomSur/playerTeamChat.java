@@ -14,11 +14,11 @@ import java.util.Map;
 import java.util.UUID;
 
 public class playerTeamChat implements CommandExecutor, Listener {
-    private final zombieSurvival plugin;
+    private final survivalDiary mainPg;
     private final Map<UUID, Boolean> globalChatStatus = new HashMap<>(); // true = 전체 채팅, false = 팀 채팅
 
-    public playerTeamChat(zombieSurvival plugin) {
-        this.plugin = plugin;
+    public playerTeamChat(survivalDiary mainPg) {
+        this.mainPg = mainPg;
     }
 
     public void setGlobalChat(UUID playerUUID, boolean isGlobal) {
@@ -27,7 +27,7 @@ public class playerTeamChat implements CommandExecutor, Listener {
 
     @EventHandler
     public void onPlayerChat(AsyncPlayerChatEvent event) {
-        if (!plugin.gameStart) {
+        if (!mainPg.gameStart) {
             return; // 게임이 시작되지 않았다면 전체 채팅 유지
         }
 
@@ -38,7 +38,7 @@ public class playerTeamChat implements CommandExecutor, Listener {
         if (isGlobalChat) {
             // 전체 채팅 모드에서는 모든 플레이어가 메시지를 받을 수 있도록 유지
             event.getRecipients().clear();
-            event.getRecipients().addAll(plugin.getServer().getOnlinePlayers());
+            event.getRecipients().addAll(mainPg.getServer().getOnlinePlayers());
             event.setFormat(ChatColor.YELLOW + "[전체] " + ChatColor.WHITE + "<%s> %s");
             return;
         }
@@ -47,17 +47,17 @@ public class playerTeamChat implements CommandExecutor, Listener {
         event.getRecipients().clear(); // 모든 수신자 제거 후 특정 팀만 추가
 
         // 생존자 팀
-        if (plugin.getPlayerTeam().contains(senderUUID)) {
-            event.getRecipients().addAll(plugin.getPlayerTeam().stream()
-                    .map(uuid -> plugin.getServer().getPlayer(uuid))
+        if (mainPg.getPlayerTeam().contains(senderUUID)) {
+            event.getRecipients().addAll(mainPg.getPlayerTeam().stream()
+                    .map(uuid -> mainPg.getServer().getPlayer(uuid))
                     .filter(player -> player != null)
                     .toList());
             event.setFormat(ChatColor.GREEN + "[생존자] " + ChatColor.WHITE + "<%s> %s");
         }
         // 좀비 팀
-        else if (plugin.getZombieTeam().contains(senderUUID)) {
-            event.getRecipients().addAll(plugin.getZombieTeam().stream()
-                    .map(uuid -> plugin.getServer().getPlayer(uuid))
+        else if (mainPg.getZombieTeam().contains(senderUUID)) {
+            event.getRecipients().addAll(mainPg.getZombieTeam().stream()
+                    .map(uuid -> mainPg.getServer().getPlayer(uuid))
                     .filter(player -> player != null)
                     .toList());
             event.setFormat(ChatColor.RED + "[좀비] " + ChatColor.WHITE + "<%s> %s");
@@ -74,13 +74,13 @@ public class playerTeamChat implements CommandExecutor, Listener {
         Player player = (Player) sender;
         UUID playerUUID = player.getUniqueId();
 
-        if (!plugin.gameStart) {
+        if (!mainPg.gameStart) {
             player.sendMessage(ChatColor.RED + "이 명령어는 게임 시작 후 사용할 수 있습니다.");
             return true;
         }
 
         if (command.getName().equalsIgnoreCase("teamchat")) {
-            if(plugin.getPlayerTeam().contains(playerUUID) || plugin.getZombieTeam().contains(playerUUID))
+            if(mainPg.getPlayerTeam().contains(playerUUID) || mainPg.getZombieTeam().contains(playerUUID))
             {
                 setGlobalChat(playerUUID, false);
                 player.sendMessage(ChatColor.GREEN + "팀 채팅 모드입니다.");

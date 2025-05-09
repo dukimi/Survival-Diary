@@ -1,6 +1,6 @@
-name: zombieSurvival
+name: SurvivalDiary
 version: ${version}
-main: org.gacstudio.zomSur.zombieSurvival
+main: org.gacstudio.zomSur.survivalDiary
 api-version: '1.21'
 
 commands:
