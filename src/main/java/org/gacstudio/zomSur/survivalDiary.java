@@ -1,5 +1,10 @@
 package org.gacstudio.zomSur;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import net.md_5.bungee.api.chat.ComponentBuilder;
+import net.md_5.bungee.api.chat.HoverEvent;
+import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
@@ -22,9 +27,15 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -49,6 +60,7 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
     public boolean isReady = false;
     public boolean gameStart = false;
     public boolean readyShop = false;
+    public boolean randomgetrunning = false;
 
     int minX = -200;
     int maxX = 200;
@@ -84,6 +96,16 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
     }
     public List<UUID> getPlayerTeam() {
         return playerTeam;
+    }
+    public Map<String, String> loadLanguageMap() {
+        try (InputStream in = getResource("lang/ko_kr.json");
+             Reader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
+            Gson gson = new Gson();
+            return gson.fromJson(reader, new TypeToken<Map<String, String>>() {}.getType());
+        } catch (IOException e) {
+            e.printStackTrace();
+            return Collections.emptyMap();
+        }
     }
 
     private Location[] generateRandomSpawnPoints(World world, int count) {
@@ -122,7 +144,7 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
         if (command.getName().equalsIgnoreCase("zomsur")) {
             // 첫 번째 인수에 대한 자동 완성
             if (args.length == 1) {
-                List<String> subCommands = Arrays.asList("start", "setwinitem", "stop", "setteam", "leave");
+                List<String> subCommands = Arrays.asList("start", "setwinitem", "setwinitemrandom", "stop", "setteam", "leave");
                 String input = args[0].toLowerCase(); // 사용자가 입력한 값
 
                 // 입력값과 일치하는 명령어만 필터링하여 반환
@@ -179,9 +201,10 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        final JavaPlugin plugin = this;
         if (command.getName().equalsIgnoreCase("zomsur")) {
-            if (args.length == 0 || (!args[0].equalsIgnoreCase("start") && !args[0].equalsIgnoreCase("stop") && !args[0].equalsIgnoreCase("setteam") && !args[0].equalsIgnoreCase("leave") && !args[0].equalsIgnoreCase("setwinitem"))) {
-                sender.sendMessage(ChatColor.RED + "사용법: /zomsur start 또는 /zomsur stop 또는 /zomsur setteam 또는 /zomsur leave 또는 /zomsur setwinitem");
+            if (args.length == 0 || (!args[0].equalsIgnoreCase("start") && !args[0].equalsIgnoreCase("stop") && !args[0].equalsIgnoreCase("setteam") && !args[0].equalsIgnoreCase("leave") && !args[0].equalsIgnoreCase("setwinitem")) && !args[0].equalsIgnoreCase("setwinitemrandom")) {
+                sender.sendMessage(ChatColor.RED + "사용법: /zomsur start 또는 /zomsur stop 또는 /zomsur setteam 또는 /zomsur leave 또는 /zomsur setwinitem 또는 /zomsur setwinitemrandom");
                 return true;
             }
 
@@ -225,6 +248,7 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
                 zombieTeam.clear();
                 playerTeam.clear();
                 world.setGameRuleValue("doImmediateRespawn", "true");
+                world.setGameRuleValue("locatorBar", "false");
                 gameStart = true;
                 isReady = true;
 
@@ -357,7 +381,7 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
                     targetPlayer.closeInventory();
                     targetPlayer.getInventory().clear();
                     targetPlayer.setMaxHealth(20);
-                    targetPlayer.setHealth(targetPlayer.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue());
+                    targetPlayer.setHealth(targetPlayer.getAttribute(Attribute.MAX_HEALTH).getValue());
                     targetPlayer.setFoodLevel(20);
                     targetPlayer.setSaturation(20.0f); // 포화상태
                     targetPlayer.setExp(0);
@@ -376,7 +400,7 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
                     targetPlayer.closeInventory();
                     targetPlayer.getInventory().clear();
                     targetPlayer.setMaxHealth(20);
-                    targetPlayer.setHealth(targetPlayer.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue());
+                    targetPlayer.setHealth(targetPlayer.getAttribute(Attribute.MAX_HEALTH).getValue());
                     targetPlayer.setFoodLevel(20);
                     targetPlayer.setSaturation(20.0f); // 포화상태
                     targetPlayer.setExp(0);
@@ -420,6 +444,155 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
                 } catch (IllegalArgumentException e) {
                     sender.sendMessage(ChatColor.RED + "잘못된 아이템 이름입니다. " + e);
                 }
+                return true;
+            }
+            else if (args[0].equalsIgnoreCase("setwinitemrandom")) {
+                if (gameStart) {
+                    sender.sendMessage(ChatColor.RED + "게임 중에는 변경할 수 없습니다.");
+                    return true;
+                }
+                if(randomgetrunning)
+                {
+                    sender.sendMessage(ChatColor.RED + "이미 아이템을 추첨 중입니다.");
+                    return true;
+                }
+
+                randomgetrunning = true;
+
+                Set<Material> bannedItems = Set.of(
+                        //AdminBlock
+                        Material.COMMAND_BLOCK,
+                        Material.CHAIN_COMMAND_BLOCK,
+                        Material.REPEATING_COMMAND_BLOCK,
+                        Material.COMMAND_BLOCK_MINECART,
+                        Material.JIGSAW,
+                        Material.STRUCTURE_BLOCK,
+                        Material.STRUCTURE_VOID,
+                        Material.BARRIER,
+                        Material.DEBUG_STICK,
+                        Material.TEST_INSTANCE_BLOCK,
+                        Material.TEST_BLOCK,
+                        Material.LIGHT,
+                        Material.KNOWLEDGE_BOOK,
+
+                        // SurvivalBlock
+                        Material.AIR,
+                        Material.CAVE_AIR,
+                        Material.VOID_AIR,
+                        Material.WATER,
+                        Material.LAVA,
+                        Material.BEDROCK,
+                        Material.SPAWNER,
+                        Material.BUBBLE_COLUMN,
+                        Material.MOVING_PISTON,
+                        Material.FIRE,
+                        Material.SOUL_FIRE,
+                        Material.POWDER_SNOW,
+                        Material.END_GATEWAY,
+                        Material.END_PORTAL,
+                        Material.END_PORTAL_FRAME,
+                        Material.NETHER_PORTAL,
+                        Material.PLAYER_HEAD,
+                        Material.PLAYER_WALL_HEAD,
+                        Material.ZOMBIE_WALL_HEAD,
+                        Material.CREEPER_WALL_HEAD,
+                        Material.DRAGON_WALL_HEAD,
+                        Material.SKELETON_WALL_SKULL,
+                        Material.FROGSPAWN,
+                        Material.PETRIFIED_OAK_SLAB,
+                        Material.REINFORCED_DEEPSLATE
+                );
+
+                List<Material> itemList = Arrays.stream(Material.values())
+                        .filter(Material::isItem)
+                        .filter(m -> !bannedItems.contains(m))
+                        .filter(m -> !m.name().endsWith("_SPAWN_EGG"))
+                        .collect(Collectors.toList());
+
+                Map<String, String> langMap = loadLanguageMap(); // 여기서 목록 로드
+                new BukkitRunnable() {
+                    int ticks = 0;
+                    int totalDuration = 200;
+                    int delayCounter = 0;
+                    int currentDelay = 2;
+                    Material chosenItem = null;
+
+                    int soundCycle = 0;
+                    Sound[] loopSounds = {
+                            Sound.BLOCK_NOTE_BLOCK_PLING,
+                            Sound.BLOCK_NOTE_BLOCK_PLING,
+                            Sound.BLOCK_NOTE_BLOCK_PLING,
+                            Sound.BLOCK_NOTE_BLOCK_PLING
+                    };
+                    float[] pitches = {
+                            1.2f,
+                            1.0f,
+                            1.2f,
+                            1.6f
+                    };
+
+                    public void run() {
+                        if (ticks >= totalDuration) {
+                            dataLoad.winItem = chosenItem;
+                            String key = "item.minecraft." + chosenItem.name().toLowerCase();
+                            if (!langMap.containsKey(key)) {
+                                key = "block.minecraft." + chosenItem.name().toLowerCase();
+                            }
+                            String displayName = langMap.getOrDefault(key, chosenItem.name());
+
+                            for (Player p : Bukkit.getOnlinePlayers()) {
+                                p.playSound(p.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.5f, 1.0f);
+
+                                TextComponent msg = new TextComponent(ChatColor.GREEN + "승리 아이템이 ");
+                                TextComponent itemName = new TextComponent(ChatColor.GOLD + displayName);
+                                TextComponent msg2 = new TextComponent(ChatColor.GREEN + "(으)로 결정되었습니다!");
+                                itemName.setHoverEvent(new HoverEvent(
+                                        HoverEvent.Action.SHOW_TEXT,
+                                        new ComponentBuilder(ChatColor.GRAY + "Material: " + chosenItem.name()).create()
+                                ));
+                                msg.addExtra(itemName);
+                                msg.addExtra(msg2);
+                                p.spigot().sendMessage(msg);
+                                //p.sendMessage(ChatColor.GREEN + "승리 아이템이 " + ChatColor.GOLD + displayName + ChatColor.GREEN + "(으)로 결정되었습니다!");
+                            }
+
+                            getLogger().info("Set Victory Item: " + chosenItem.name());
+                            randomgetrunning = false;
+                            cancel();
+                            return;
+                        }
+
+                        if (delayCounter <= 0) {
+                            chosenItem = itemList.get(random.nextInt(itemList.size()));
+
+                            String key = "item.minecraft." + chosenItem.name().toLowerCase();
+                            if (!langMap.containsKey(key)) {
+                                key = "block.minecraft." + chosenItem.name().toLowerCase();
+                            }
+                            String displayName = langMap.getOrDefault(key, chosenItem.name());
+
+
+                            Sound currentSound = loopSounds[soundCycle % 4];
+                            float currentPitch = pitches[soundCycle % 4];
+                            soundCycle++;
+                            for (Player p : Bukkit.getOnlinePlayers()) {
+                                p.sendTitle(
+                                        ChatColor.GOLD + displayName,
+                                        ChatColor.YELLOW + "승리 아이템 정하는 중..",
+                                        0, 20, 10
+                                );
+                                p.playSound(p.getLocation(), currentSound, 1.0f, currentPitch);
+                            }
+
+                            currentDelay = (int) (2 + (ticks / 10.0));
+                            delayCounter = currentDelay;
+                            ticks += currentDelay;
+                        } else {
+                            delayCounter--;
+                        }
+                    }
+                }.runTaskTimer(plugin, 0L, 1L);
+
                 return true;
             }
             return false;
@@ -478,6 +651,13 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
         isReady = false;
         readyShop = true;
 
+        Map<String, String> langMap = loadLanguageMap(); // 여기서 목록 로드
+        String key = "item.minecraft." + dataLoad.winItem.name().toLowerCase();
+        if (!langMap.containsKey(key)) {
+            key = "block.minecraft." + dataLoad.winItem.name().toLowerCase();
+        }
+        String displayName = langMap.getOrDefault(key, dataLoad.winItem.name());
+
         // 생존자 팀 설정
         for (int i = 0; i < playerTeam.size(); i++) {
             Player player = Bukkit.getPlayer(playerTeam.get(i));
@@ -491,7 +671,7 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
                 player.closeInventory();
                 player.getInventory().clear();
                 player.setMaxHealth(20);
-                player.setHealth(player.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue());
+                player.setHealth(player.getAttribute(Attribute.MAX_HEALTH).getValue());
                 player.setFoodLevel(20);
                 player.setSaturation(20.0f); // 포화상태
                 player.setExp(0);
@@ -500,7 +680,25 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
 
                 player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 2.0f);
                 sendBigTitle(player, ChatColor.GREEN + "생존자", ChatColor.WHITE + "좀비로부터 도망치고, 살아남으세요!");
-                player.sendMessage(ChatColor.GREEN + "\n\n당신은 생존자 입니다!" + ChatColor.WHITE + "\n\n최대한 빠르게 아이템을 얻어 중앙상자(0, ~, 0)에 넣으세요!" + ChatColor.RED + "\n\n서두르세요. 좀비는 중앙 상자를 방어하고 있거나 당신을 감염시키기 위해 추격하고 있을 것입니다!\n\n" + ChatColor.WHITE + "채팅 명령어:\n" + "/teamchat : 팀 채팅으로 전환\n/allchat : 전체 채팅으로 전환\n\n" + ChatColor.GOLD + "생존자 승리 조건 아이템: " + ChatColor.WHITE + dataLoad.winItem);
+
+                // 전송
+                TextComponent base = new TextComponent(ChatColor.GREEN + "\n\n당신은 생존자 입니다!");
+                base.addExtra(new TextComponent(ChatColor.WHITE + "\n\n최대한 빠르게 아이템을 얻어 중앙상자(0, ~, 0)에 넣으세요!"));
+                base.addExtra(new TextComponent(ChatColor.RED + "\n\n서두르세요. 좀비는 중앙 상자를 방어하고 있거나 당신을 감염시키기 위해 추격하고 있을 것입니다!\n\n"));
+                base.addExtra(new TextComponent(ChatColor.WHITE + "채팅 명령어:\n/teamchat : 팀 채팅으로 전환\n/allchat : 전체 채팅으로 전환\n\n"));
+                base.addExtra(new TextComponent(ChatColor.GOLD + "생존자 승리 조건 아이템: "));
+                // 아이템 이름에 HoverEvent 붙이기
+                TextComponent hoverItem = new TextComponent(ChatColor.WHITE + displayName);
+                hoverItem.setHoverEvent(new HoverEvent(
+                        HoverEvent.Action.SHOW_TEXT,
+                        //new ComponentBuilder("Material: " + dataLoad.winItem.name()).color(ChatColor.GRAY.asBungee()).create()
+                        new ComponentBuilder(ChatColor.GRAY + "Material: " + dataLoad.winItem.name()).create()
+                ));
+                base.addExtra(hoverItem);
+
+                // 보내기!
+                player.spigot().sendMessage(base);
+                //player.sendMessage(ChatColor.GREEN + "\n\n당신은 생존자 입니다!" + ChatColor.WHITE + "\n\n최대한 빠르게 아이템을 얻어 중앙상자(0, ~, 0)에 넣으세요!" + ChatColor.RED + "\n\n서두르세요. 좀비는 중앙 상자를 방어하고 있거나 당신을 감염시키기 위해 추격하고 있을 것입니다!\n\n" + ChatColor.WHITE + "채팅 명령어:\n" + "/teamchat : 팀 채팅으로 전환\n/allchat : 전체 채팅으로 전환\n\n" + ChatColor.GOLD + "생존자 승리 조건 아이템: " + ChatColor.WHITE + displayName);
             }
         }
 
@@ -526,7 +724,7 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
                 player.closeInventory();
                 player.getInventory().clear();
                 player.setMaxHealth(40); // 좀비는 더 많은 체력
-                player.setHealth(player.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue());
+                player.setHealth(player.getAttribute(Attribute.MAX_HEALTH).getValue());
                 player.setFoodLevel(20);
                 player.setSaturation(20.0f); // 포화상태
                 player.setExp(0);
@@ -538,7 +736,26 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
 
                 player.playSound(player.getLocation(), Sound.ENTITY_WITHER_SPAWN, 1.0f, 1.0f);
                 sendBigTitle(player, ChatColor.RED + "좀비", ChatColor.WHITE + "생존자를 추격하고 감염시키세요!");
-                player.sendMessage(ChatColor.RED + "\n\n당신은 좀비 입니다!" + ChatColor.WHITE + "\n\n생존자들을 처리해 모두 좀비로 만드세요!" + ChatColor.GOLD + "\n/zombieshop 명령어로 생존자를 처리하는데 도움을 주는 물건을 구입할 수 있습니다!" + ChatColor.RED + "\n\n서두르세요. 생존자는 추가 좀비 감염을 막기 위해 중앙 상자(0, ~, 0)에 접근할 것입니다! 상자를 방어하는것도 잊지 마세요!\n\n" + ChatColor.WHITE + "채팅 명령어:\n" + "/teamchat : 팀 채팅으로 전환\n/allchat : 전체 채팅으로 전환\n\n" + ChatColor.GOLD + "생존자 승리 조건 아이템: " + ChatColor.WHITE + dataLoad.winItem);
+
+                // 기본 메시지 구성
+                TextComponent base = new TextComponent(ChatColor.RED + "\n\n당신은 좀비 입니다!");
+                base.addExtra(new TextComponent(ChatColor.WHITE + "\n\n생존자들을 처리해 모두 좀비로 만드세요!"));
+                base.addExtra(new TextComponent(ChatColor.GOLD + "\n/zombieshop 명령어로 생존자를 처리하는데 도움을 주는 물건을 구입할 수 있습니다!"));
+                base.addExtra(new TextComponent(ChatColor.RED + "\n\n서두르세요. 생존자는 추가 좀비 감염을 막기 위해 중앙 상자(0, ~, 0)에 접근할 것입니다! 상자를 방어하는것도 잊지 마세요!\n\n"));
+                base.addExtra(new TextComponent(ChatColor.WHITE + "채팅 명령어:\n/teamchat : 팀 채팅으로 전환\n/allchat : 전체 채팅으로 전환\n\n"));
+                base.addExtra(new TextComponent(ChatColor.GOLD + "생존자 승리 조건 아이템: "));
+                // HoverEvent가 달린 displayName 컴포넌트
+                TextComponent hoverItem = new TextComponent(ChatColor.WHITE + displayName);
+                hoverItem.setHoverEvent(new HoverEvent(
+                        HoverEvent.Action.SHOW_TEXT,
+                        new ComponentBuilder(ChatColor.GRAY + "Material: " + dataLoad.winItem.name()).create()
+                        //new ComponentBuilder("Material: " + dataLoad.winItem.name()).color(ChatColor.GRAY.asBungee()).create()
+                ));
+                base.addExtra(hoverItem);
+
+                // 메시지 전송
+                player.spigot().sendMessage(base);
+                //player.sendMessage(ChatColor.RED + "\n\n당신은 좀비 입니다!" + ChatColor.WHITE + "\n\n생존자들을 처리해 모두 좀비로 만드세요!" + ChatColor.GOLD + "\n/zombieshop 명령어로 생존자를 처리하는데 도움을 주는 물건을 구입할 수 있습니다!" + ChatColor.RED + "\n\n서두르세요. 생존자는 추가 좀비 감염을 막기 위해 중앙 상자(0, ~, 0)에 접근할 것입니다! 상자를 방어하는것도 잊지 마세요!\n\n" + ChatColor.WHITE + "채팅 명령어:\n" + "/teamchat : 팀 채팅으로 전환\n/allchat : 전체 채팅으로 전환\n\n" + ChatColor.GOLD + "생존자 승리 조건 아이템: " + ChatColor.WHITE + displayName);
             }
         }
 
@@ -862,7 +1079,7 @@ public class survivalDiary extends JavaPlugin implements CommandExecutor, Listen
                 player.closeInventory();
                 player.getInventory().clear();
                 player.setMaxHealth(20);
-                player.setHealth(player.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue());
+                player.setHealth(player.getAttribute(Attribute.MAX_HEALTH).getValue());
                 player.setFoodLevel(20);
                 player.setSaturation(20.0f);
                 player.setExp(0);

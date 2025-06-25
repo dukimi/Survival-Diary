@@ -1,7 +1,7 @@
 name: SurvivalDiary
-version: 1.10-SNAPSHOT
+version: 1.12-SNAPSHOT
 main: org.gacstudio.zomSur.survivalDiary
-api-version: '1.21'
+api-version: '1.21.6'
 
 commands:
   zomsur:
